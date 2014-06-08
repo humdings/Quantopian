@@ -83,3 +83,88 @@ class EventManager(object):
         closed_for_day = (t > self.close_time)
         open_for_day = (t >= self.open_time)
         return open_for_day and not closed_for_day
+
+
+
+'''
+This is a second version that uses the trading calendar in Zipline.
+
+If it is between the open and close time on the event date,
+the passed entry_func is called for the entry decision. The
+maximum daily hits works correctly for this version.
+'''
+
+from zipline.utils import tradingcalendar as calendar
+
+
+class EventManager(object):
+    '''
+    Manager for periodic events.
+
+    parameters
+
+    period: integer
+        number of business days between events
+        default: 1
+
+    max_daily_hits: integer
+        upper limit on the number of times per day the event is triggered.
+        (trading controls could work for this too)
+        default: 1
+
+    rule_func: function (returns a boolean)
+        decision function for timimng an intraday entry point
+    '''
+
+    def __init__(self,
+                 period=1,
+                 rule_func=None,
+                 max_daily_hits=1):
+
+        self.period = period
+        self.max_daily_hits = max_daily_hits
+        self.remaining_hits = max_daily_hits
+        self.next_event_date = None
+        self.market_open = None
+        self.market_close = None
+        self._rule_func = rule_func
+
+    @property
+    def todays_index(self):
+        dt = calendar.canonicalize_datetime(get_datetime())
+        return calendar.trading_days.searchsorted(dt)
+
+    def open_and_close(self, dt):
+        return calendar.open_and_closes.T[dt]
+
+    def __call__(self, *args, **kwargs):
+        '''
+        Entry point for the rule_func
+        All arguments are passed to rule_func
+        '''
+        now = get_datetime()
+        dt = calendar.canonicalize_datetime(now)
+        if self.next_event_date is None:
+            self.next_event_date = dt
+            times = self.open_and_close(dt)
+            self.market_open = times['market_open']
+            self.market_close = times['market_close']
+        if now < self.market_open:
+            return False
+        if now == self.market_close:
+            self.set_next_event_date()
+        decision = self._rule_func(*args, **kwargs)
+        if decision:
+            self.remaining_hits -= 1
+            if self.remaining_hits <= 0:
+                self.set_next_event_date()
+        return decision
+
+    def set_next_event_date(self):
+        self.remaining_hits = self.max_daily_hits
+        tdays = calendar.trading_days
+        idx = self.todays_index + self.period
+        self.next_event_date = tdays[idx]
+        times = self.open_and_close(self.next_event_date)
+        self.market_open = times['market_open']
+        self.market_close = times['market_close']
