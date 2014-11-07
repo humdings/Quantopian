@@ -7,7 +7,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python</string>
-        <string>/Users/dedwards/dropbox/data/update_fetcher.py</string>
+        <string>/Users/dedwards/dropbox/portfolio/update_fetcher.py</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
